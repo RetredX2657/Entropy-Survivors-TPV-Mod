@@ -37,7 +37,7 @@ local DEFAULTS = {
     hpy = 0.85,         -- ... and of the height (0 = top edge)
     hint = 1,           -- 1 = show the key hint at the top of the screen when FrogCam switches on
     freekey = "LeftControl", -- hold to free the mouse pointer (an Unreal key name, e.g. LeftControl, Tab, B)
-    debug = 1,          -- 1 = write a status line to FrogCam.log once a second
+    debug = 0,          -- 1 = write a status line to FrogCam.log once a second (for troubleshooting)
 }
 local CFG_ORDER = { "dist", "height", "shoulder", "fov", "sens", "invert", "pmin", "pmax", "retlow", "retcenter", "aimmin", "aimmax", "aimz", "hpmove", "hpx", "hpy", "hint", "freekey", "debug" }
 local DIST_PRESETS = { 450.0, 700.0, 1100.0 }

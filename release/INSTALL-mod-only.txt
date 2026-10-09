@@ -1,0 +1,35 @@
+FrogCam {VERSION} - third-person camera for Entropy Survivors
+https://github.com/RetredX2657/Entropy-Survivors-TPV-Mod
+
+This is the mod on its own, for people who already have UE4SS installed.
+If you don't, get the "with-UE4SS" download instead - it is ready to go.
+
+Needs: a UE4SS build that supports Unreal Engine 5.4. Tested with
+UE4SS experimental-latest {UE4SS}.
+
+
+INSTALL
+-------
+1. Copy the  FrogCam  folder from this zip into your UE4SS Mods folder:
+   EntropySurvivors\Binaries\Win64\ue4ss\Mods\
+2. Make sure it is switched on:
+   - in  Mods\mods.txt  add the line   FrogCam : 1
+     ABOVE the  "; Built-in keybinds"  line, and
+   - if there is a  Mods\mods.json , add   { "mod_name": "FrogCam", "mod_enabled": true }
+3. Start the game. A hint at the top of the screen shows the keys.
+
+
+CONTROLS
+--------
+  Mouse            look and aim (the frog shoots where the camera points)
+  WASD             move, relative to the camera
+  F5               third person on / off (back to the original top-down view)
+  F6               camera distance: near (almost first person) / mid / far
+  Hold Left Ctrl   free mouse pointer, for clicking hub pop-ups
+
+Settings: console (~) command  frogcam  - see the GitHub page for the list.
+
+
+UNINSTALL
+---------
+Delete  ue4ss\Mods\FrogCam  (and its line in mods.txt / mods.json).

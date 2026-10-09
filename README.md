@@ -9,28 +9,24 @@ A third-person camera mod for **Entropy Survivors**. It replaces the fixed top-d
 - Hold **Left Ctrl** to free the mouse pointer and click hub pop-ups. A hint at the top of the screen shows these keys when FrogCam switches on.
 - Single-player only. It switches itself off in co-op.
 
-> **Status: early alpha.** It has been tested on one PC, and the first test runs are still in progress. Expect rough edges, and please report what you find.
+> **Status: alpha.** Tested on one PC through the hub and full rounds. Please report anything that looks or feels wrong on the [Issues](https://github.com/RetredX2657/Entropy-Survivors-TPV-Mod/issues) page.
 
-## Requirements
+## Install (easy way)
 
-- Entropy Survivors (Steam, Windows). The game runs on Unreal Engine 5.4.
-- [RE-UE4SS](https://github.com/UE4SS-RE/RE-UE4SS), the **experimental-latest** build. Tested with `UE4SS_v3.0.1-1161-g6eb3d9bc`.
+1. Download **`FrogCam-vX.Y.Z-with-UE4SS.zip`** from the [latest release](https://github.com/RetredX2657/Entropy-Survivors-TPV-Mod/releases/latest). It includes the UE4SS mod loader, already set up.
+2. In Steam, right-click **Entropy Survivors → Manage → Browse local files**, then open `EntropySurvivors\Binaries\Win64`. That's the folder with `EntropySurvivors-Win64-Shipping.exe` in it.
+3. Copy everything from the zip into that folder.
+4. Start the game. A hint at the top of the screen shows the keys.
 
-## Install
+**Uninstall:** delete `dwmapi.dll` and the `ue4ss` folder from `Win64`.
 
-1. Download `UE4SS_v3.0.1-…zip` from the [UE4SS experimental-latest release](https://github.com/UE4SS-RE/RE-UE4SS/releases/tag/experimental-latest).
-2. Extract it into the folder that holds the game's executable:
-   `…\steamapps\common\Entropy Survivors\EntropySurvivors\Binaries\Win64\`
-   Afterwards, `dwmapi.dll` and a `ue4ss\` folder should sit next to `EntropySurvivors-Win64-Shipping.exe`.
-3. Copy this repo's `FrogCam` folder into `Win64\ue4ss\Mods\`.
-4. Open `Win64\ue4ss\Mods\mods.txt` and add this line **above** the `Keybinds : 1` line:
-   ```
-   FrogCam : 1
-   ```
-   If the folder also has a `mods.json`, add `{ "mod_name": "FrogCam", "mod_enabled": true }` to it.
-5. Start the game.
+## Install (if you already use UE4SS)
 
-**Uninstall:** delete `ue4ss\Mods\FrogCam`. To remove UE4SS as well, delete `dwmapi.dll` and the `ue4ss` folder.
+Download **`FrogCam-vX.Y.Z-mod-only.zip`**, copy its `FrogCam` folder into `Win64\ue4ss\Mods\`, and add `FrogCam : 1` to `Mods\mods.txt` **above** the `; Built-in keybinds` line. If there is a `Mods\mods.json`, also add `{ "mod_name": "FrogCam", "mod_enabled": true }` to it.
+
+Your UE4SS build needs to support Unreal Engine 5.4. FrogCam is tested with UE4SS experimental-latest, `UE4SS_v3.0.1-1161-g6eb3d9bc`.
+
+**Uninstall:** delete `ue4ss\Mods\FrogCam` and its line in `mods.txt` / `mods.json`.
 
 ## Controls
 
@@ -71,7 +67,7 @@ frogcam reload          reload the script without restarting the game
 | `hpx` / `hpy` | 0.25 / 0.85 | Health bar screen position as a fraction of width / height (0,0 = top left) |
 | `hint` | 1 | 1 = show the key hint (free-pointer key / F5 / F6) for a few seconds when FrogCam switches on |
 | `freekey` | LeftControl | Key to hold for a free mouse pointer, as an Unreal key name: `LeftControl`, `Tab`, `B`, `MiddleMouseButton`, ... (Alt is the game's alternate dodge) |
-| `debug` | 1 | 1 = write a status line to `FrogCam.log` every second |
+| `debug` | 0 | 1 = write a status line to `FrogCam.log` every second, for troubleshooting. The log starts fresh at each game launch |
 
 ## How it works
 
@@ -91,9 +87,12 @@ frogcam reload          reload the script without restarting the game
 - `FrogCam/Scripts/main.lua`: loads the mod and sets up hooks and the console command.
 - `FrogCam/Scripts/frogcam.lua`: all camera, aim and movement logic. Reload it in game with `frogcam reload`.
 - `tools/FrogCamProbe`: a read-only diagnostic mod. Press F7 in game to log the player, camera and spring-arm setup to `FrogCamProbe.log`.
+- `tools/build-release.ps1`: builds both release zips into `dist/`. The bundled UE4SS build is kept in `third_party/`, which is not in git, and downloaded there if missing.
 - `tools/link-dev.ps1`: links this repo's `FrogCam` folder into the game's Mods folder, so your edits are live. To remove the link, run `rmdir "<Mods>\FrogCam"` in cmd. Don't delete it recursively from Explorer or PowerShell 5.1, which can follow the link and delete the repo's files.
 
 ## Credits
+
+[RE-UE4SS](https://github.com/UE4SS-RE/RE-UE4SS) (MIT) is the mod loader FrogCam runs on. The with-UE4SS download bundles it unmodified, with its license, and only its mod list is set up.
 
 The approach (polling keys on the game thread, mouse look by re-centring the cursor, the reloadable script layout) is modelled on [AscentFPS](https://github.com/dimap/ascent-fps) by dimap (MIT), a first-person mod for The Ascent.
 

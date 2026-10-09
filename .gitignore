@@ -4,3 +4,7 @@ FrogCam/FrogCam.cfg
 
 # UE4SS dumps
 CXXHeaderDump/
+
+# release builds and the UE4SS download they bundle
+dist/
+third_party/
