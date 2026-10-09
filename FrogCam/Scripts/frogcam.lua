@@ -35,9 +35,11 @@ local DEFAULTS = {
     hpmove = 1,         -- 1 = show the health bar at a fixed screen spot, 0 = where the game puts it
     hpx = 0.25,         -- health bar screen position, fraction of the width (0 = left edge)
     hpy = 0.85,         -- ... and of the height (0 = top edge)
+    hint = 1,           -- 1 = show the key hint at the top of the screen when FrogCam switches on
+    freekey = "LeftControl", -- hold to free the mouse pointer (an Unreal key name, e.g. LeftControl, Tab, B)
     debug = 1,          -- 1 = write a status line to FrogCam.log once a second
 }
-local CFG_ORDER = { "dist", "height", "shoulder", "fov", "sens", "invert", "pmin", "pmax", "retlow", "retcenter", "aimmin", "aimmax", "aimz", "hpmove", "hpx", "hpy", "debug" }
+local CFG_ORDER = { "dist", "height", "shoulder", "fov", "sens", "invert", "pmin", "pmax", "retlow", "retcenter", "aimmin", "aimmax", "aimz", "hpmove", "hpx", "hpy", "hint", "freekey", "debug" }
 local DIST_PRESETS = { 450.0, 700.0, 1100.0 }
 
 S.cfg = S.cfg or {}
@@ -50,17 +52,32 @@ if S.on == nil then S.on = true end
 local function clamp(v, lo, hi) if v < lo then return lo end; if v > hi then return hi end; return v end
 local function wrap(a) while a > 180 do a = a - 360 end; while a < -180 do a = a + 360 end; return a end
 
+-- settings are numbers, except the few whose default is a string (key names)
+local function setCfg(k, v)
+    if DEFAULTS[k] == nil or v == nil then return false end
+    if type(DEFAULTS[k]) == "string" then
+        if not tostring(v):match("^[%w_]+$") then return false end
+        S.cfg[k] = tostring(v)
+    else
+        local n = tonumber(v); if n == nil then return false end
+        S.cfg[k] = n
+    end
+    return true
+end
 local function loadCfg()
     local f = io.open(CFG, "r"); if not f then return end
     for line in f:lines() do
-        local k, v = line:match("^%s*([%w_]+)%s*=%s*([%-%d%.]+)")
-        if k and DEFAULTS[k] ~= nil then S.cfg[k] = tonumber(v) or S.cfg[k] end
+        local k, v = line:match("^%s*([%w_]+)%s*=%s*(%S+)")
+        if k then setCfg(k, v) end
     end
     f:close()
 end
 local function saveCfg()
     local f = io.open(CFG, "w"); if not f then return end
-    for _, k in ipairs(CFG_ORDER) do f:write(string.format("%s=%.4f\n", k, S.cfg[k])) end
+    for _, k in ipairs(CFG_ORDER) do
+        local v = S.cfg[k]
+        f:write(k .. "=" .. (type(v) == "number" and string.format("%.4f", v) or tostring(v)) .. "\n")
+    end
     f:close()
 end
 if not S.cfgLoaded then loadCfg(); S.cfgLoaded = true end
@@ -165,11 +182,82 @@ local function placeReticle(pc, sx, sy)
     end
 end
 
+-- ---------------------------------------------------------------- on-screen hint
+-- A line of text at the top of the screen telling players how to get the mouse pointer back (hub pop-ups
+-- need it) and the other keys. Shown when FrogCam first switches on and after F5 turns it back on.
+-- Built from Lua like AscentFPS's widgets: a UserWidget with its own WidgetTree, a CanvasPanel and a
+-- TextBlock. (PrintString's on-screen text is compiled out of shipping builds.)
+local VIS_COLLAPSED, VIS_HIT_TEST_INVISIBLE = 1, 3
+local HINT_SECONDS = 8.0
+if S.hintPending == nil then S.hintPending = true end
+
+-- "LeftControl" -> "LEFT CONTROL"
+local function keyLabel(name)
+    return (tostring(name):gsub("(%l)(%u)", "%1 %2"):upper())
+end
+local function hintText()
+    return "FROGCAM   -   hold " .. keyLabel(S.cfg.freekey) .. " for the mouse pointer   |   F5  top-down view   |   F6  camera distance"
+end
+
+local function buildHint(pc)
+    local gi = lib("/Script/Engine.Default__GameplayStatics"):GetGameInstance(pc)
+    if not valid(gi) then error("no game instance") end
+    S.hintN = (S.hintN or 0) + 1
+    local w = StaticConstructObject(lib("/Script/UMG.UserWidget"), gi, FName("FrogCam_Hint_" .. S.hintN))
+    local tree = StaticConstructObject(lib("/Script/UMG.WidgetTree"), w, FName("FrogCam_Tree"))
+    w.WidgetTree = tree
+    local canvas = StaticConstructObject(lib("/Script/UMG.CanvasPanel"), tree, FName("FrogCam_Canvas"))
+    tree.RootWidget = canvas
+    local tb = StaticConstructObject(lib("/Script/UMG.TextBlock"), canvas, FName("FrogCam_HintText"))
+    tb.Font.Size = 16
+    local c = tb.ColorAndOpacity.SpecifiedColor                       -- the game's gold hint colour
+    c.R = 1.0; c.G = 0.78; c.B = 0.15; c.A = 1.0
+    tb.ShadowOffset.X = 1.5; tb.ShadowOffset.Y = 1.5
+    tb.ShadowColorAndOpacity.R = 0; tb.ShadowColorAndOpacity.G = 0; tb.ShadowColorAndOpacity.B = 0; tb.ShadowColorAndOpacity.A = 0.9
+    -- layout is written into the slot before the Slate widget exists
+    local slot = canvas:AddChildToCanvas(tb)
+    local ld = slot.LayoutData
+    ld.Anchors.Minimum.X = 0.5; ld.Anchors.Minimum.Y = 0.07; ld.Anchors.Maximum.X = 0.5; ld.Anchors.Maximum.Y = 0.07
+    ld.Alignment.X = 0.5; ld.Alignment.Y = 0.0
+    ld.Offsets.Left = 0; ld.Offsets.Top = 0; ld.Offsets.Right = 100; ld.Offsets.Bottom = 30
+    slot.bAutoSize = true
+    tb:SetText(FText(hintText()))
+    w:SetVisibility(VIS_COLLAPSED)
+    w:AddToViewport(-40)       -- under the game's own menus
+    return w
+end
+
+local function showHint(pc)
+    if S.cfg.hint == 0 then return end
+    if not (valid(S.hint) and S.hint:IsInViewport() == true) then
+        if (S.hintFails or 0) >= 3 then return end
+        local ok, r = pcall(buildHint, pc)
+        if not ok then S.hintFails = (S.hintFails or 0) + 1; log("hint: " .. tostring(r)); return end
+        S.hint = r
+    end
+    S.hint:SetRenderOpacity(1.0)
+    S.hint:SetVisibility(VIS_HIT_TEST_INVISIBLE)
+    S.hintLeft = HINT_SECONDS
+end
+
+local function hideHint()
+    S.hintLeft = nil
+    if valid(S.hint) then S.hint:SetVisibility(VIS_COLLAPSED) end
+end
+
+local function tickHint(dt)
+    if not S.hintLeft then return end
+    S.hintLeft = S.hintLeft - dt
+    if S.hintLeft <= 0 then hideHint()
+    elseif S.hintLeft < 1.0 and valid(S.hint) then S.hint:SetRenderOpacity(S.hintLeft) end   -- fade out
+end
+
 -- hand the view back to the game
 local function deactivate(pc, why)
     if not S.active then return end
     S.active = false; S.look = false; S.lastMX = nil
     log("off (" .. tostring(why) .. ")")
+    pcall(hideHint)
     if valid(pc) then
         pcall(function() placeHealthBar(pc.Pawn, nil) end)
         pcall(placeReticle, pc, nil, nil)
@@ -209,7 +297,7 @@ function A.pcTick(Context, Delta)
     if keyPressed(pc, "F5") then
         S.on = not S.on
         log("FrogCam " .. (S.on and "on" or "off") .. " (F5)")
-        if not S.on then deactivate(pc, "F5") end
+        if S.on then S.hintPending = true else deactivate(pc, "F5") end
     end
     if keyPressed(pc, "F6") then
         local idx = 1
@@ -315,7 +403,10 @@ function A.tick(Context, Delta)
     end
     local wl = lib("/Script/UMG.Default__WidgetLayoutLibrary")
     local focused = pc:GetMousePosition({}, {}) == true
-    local look = S.vw ~= nil and focused and not S.inMenu and pc.bPauseMenuUp ~= true
+    -- holding the free key (freekey, Left Ctrl by default) frees the pointer: hub pop-ups such as "Change
+    -- Class - OPEN MENU" are clicked with it but do not count as a menu, so nothing else lets go of it
+    local freed = keyDown(pc, S.cfg.freekey)
+    local look = S.vw ~= nil and focused and not freed and not S.inMenu and pc.bPauseMenuUp ~= true
     if look ~= S.look then S.look = look; S.lastMX = nil end
     if look then
         local m = wl:GetMousePositionOnPlatform()
@@ -329,6 +420,10 @@ function A.tick(Context, Delta)
     S.step = "place"
     local loc = pawn:K2_GetActorLocation()
     local dt = 0.016; pcall(function() dt = Delta:get() end)
+    S.step = "hint"
+    if S.hintPending then S.hintPending = false; showHint(pc) end
+    tickHint(dt)
+    S.step = "place"
     -- this tick runs before the character moves this frame: lead by one frame of velocity
     local v = pawn:GetVelocity()
     local bx, by, bz = loc.X + v.X * dt, loc.Y + v.Y * dt, loc.Z
@@ -430,11 +525,13 @@ end
 -- ---------------------------------------------------------------- console: frogcam <name> <value>
 function A.command(p)
     local a1 = string.lower(tostring(p[1] or ""))
-    local n = tonumber(p[2])
     if a1 == "reset" then for k, v in pairs(DEFAULTS) do S.cfg[k] = v end; saveCfg(); return "reset"
     elseif a1 == "toggle" then S.on = not S.on; if not S.on and valid(S.pc) then deactivate(S.pc, "console") end; return "on=" .. tostring(S.on)
     elseif DEFAULTS[a1] ~= nil then
-        if n then S.cfg[a1] = n; saveCfg() end
+        if p[2] ~= nil and setCfg(a1, p[2]) then
+            saveCfg()
+            if a1 == "freekey" then hideHint(); if valid(S.hint) then S.hint:RemoveFromParent() end; S.hint = nil end   -- rebuilt with the new key name
+        end
         return a1 .. "=" .. tostring(S.cfg[a1])
     end
     local t = {}

@@ -6,6 +6,7 @@ A third-person camera mod for **Entropy Survivors**. It replaces the fixed top-d
 - WASD moves relative to the camera.
 - **F5** switches between third person and the original top-down view.
 - **F6** cycles the camera distance: near (almost first person), mid and far.
+- Hold **Left Ctrl** to free the mouse pointer and click hub pop-ups. A hint at the top of the screen shows these keys when FrogCam switches on.
 - Single-player only. It switches itself off in co-op.
 
 > **Status: early alpha.** It has been tested on one PC, and the first test runs are still in progress. Expect rough edges, and please report what you find.
@@ -39,6 +40,7 @@ A third-person camera mod for **Entropy Survivors**. It replaces the fixed top-d
 | WASD | Move, relative to the camera |
 | F5 | Third person on/off |
 | F6 | Camera distance: near (almost first person) / mid / far |
+| Hold Left Ctrl | Free the mouse pointer, for clicking hub pop-ups like "Change Class → Open Menu". The camera holds still. Change the key with `frogcam freekey <key>` |
 
 ## Settings
 
@@ -67,6 +69,8 @@ frogcam reload          reload the script without restarting the game
 | `aimz` | 182 | Height of the game's aim plane (the frog's gun height) above the hero's centre. Only change this if the frog aims backwards at some camera angles |
 | `hpmove` | 1 | 1 = show the health bar at a fixed spot on screen, 0 = where the game puts it (on the HUD ring under the mech) |
 | `hpx` / `hpy` | 0.25 / 0.85 | Health bar screen position as a fraction of width / height (0,0 = top left) |
+| `hint` | 1 | 1 = show the key hint (free-pointer key / F5 / F6) for a few seconds when FrogCam switches on |
+| `freekey` | LeftControl | Key to hold for a free mouse pointer, as an Unreal key name: `LeftControl`, `Tab`, `B`, `MiddleMouseButton`, ... (Alt is the game's alternate dodge) |
 | `debug` | 1 | 1 = write a status line to `FrogCam.log` every second |
 
 ## How it works
