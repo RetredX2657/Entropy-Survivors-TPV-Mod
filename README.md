@@ -9,6 +9,8 @@ A third-person camera mod for **Entropy Survivors**. It replaces the fixed top-d
 - Hold **Left Ctrl** to free the mouse pointer and click hub pop-ups. A hint at the top of the screen shows these keys when FrogCam switches on.
 - Single-player only. It switches itself off in co-op.
 
+> **Made with AI.** FrogCam's code was written by an AI coding agent (Claude, in Claude Code), directed and play-tested in the game by a human player. See [Credits](#credits).
+
 > **Status: alpha.** Tested on one PC through the hub and full rounds. Please report anything that looks or feels wrong on the [Issues](https://github.com/RetredX2657/Entropy-Survivors-TPV-Mod/issues) page.
 
 ## Install (easy way)
@@ -91,6 +93,8 @@ frogcam reload          reload the script without restarting the game
 - `tools/link-dev.ps1`: links this repo's `FrogCam` folder into the game's Mods folder, so your edits are live. To remove the link, run `rmdir "<Mods>\FrogCam"` in cmd. Don't delete it recursively from Explorer or PowerShell 5.1, which can follow the link and delete the repo's files.
 
 ## Credits
+
+Built with an AI coding agent (Claude Code, by Anthropic), which did the game research and wrote the code. RetredX2657 directed the design and play-tested every change in the game.
 
 [RE-UE4SS](https://github.com/UE4SS-RE/RE-UE4SS) (MIT) is the mod loader FrogCam runs on. The with-UE4SS download bundles it unmodified, with its license, and only its mod list is set up.
 

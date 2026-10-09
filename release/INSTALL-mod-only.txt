@@ -1,5 +1,7 @@
 FrogCam {VERSION} - third-person camera for Entropy Survivors
 https://github.com/RetredX2657/Entropy-Survivors-TPV-Mod
+Made with AI: the code was written by an AI coding agent (Claude Code) and
+play-tested in the game by a human player.
 
 This is the mod on its own, for people who already have UE4SS installed.
 If you don't, get the "with-UE4SS" download instead - it is ready to go.
