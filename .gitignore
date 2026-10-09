@@ -1,0 +1,6 @@
+# runtime files written by the mods
+*.log
+FrogCam/FrogCam.cfg
+
+# UE4SS dumps
+CXXHeaderDump/
