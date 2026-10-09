@@ -28,6 +28,8 @@ CONTROLS
   F5               third person on / off (back to the original top-down view)
   F6               camera distance: near (almost first person) / mid / far
   Hold Left Ctrl   free mouse pointer, for clicking hub pop-ups
+  Controller:      right stick look and aim, click R3 camera distance,
+                   hold R3 for 1 second on / off
 
 Settings: console (~) command  frogcam  - see the GitHub page for the list.
 

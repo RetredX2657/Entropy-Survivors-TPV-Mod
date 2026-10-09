@@ -23,7 +23,7 @@ local DEFAULTS = {
     shoulder = 0.0,     -- sideways pivot offset (+ = right)
     fov = 75.0,
     sens = 0.12,        -- degrees per mouse pixel
-    invert = 0,         -- 1 = invert mouse Y
+    invert = 0,         -- 1 = invert mouse Y (the controller follows the game's own invert options)
     pmin = -60.0,       -- lowest camera pitch (looking down)
     pmax = 30.0,        -- highest camera pitch; in practice looking up stops sooner, see upMax in the tick
     retlow = 0.9,       -- safety net: lowest the (hidden) cursor may go on screen (fraction of the height);
@@ -37,9 +37,13 @@ local DEFAULTS = {
     hpy = 0.85,         -- ... and of the height (0 = top edge)
     hint = 1,           -- 1 = show the key hint at the top of the screen when FrogCam switches on
     freekey = "LeftControl", -- hold to free the mouse pointer (an Unreal key name, e.g. LeftControl, Tab, B)
+    padsens = 200.0,    -- controller: camera turn speed at full right-stick tilt (degrees per second),
+                        -- scaled by the game's own controller sensitivity setting
+    paddead = 0.15,     -- controller: right-stick deadzone (0..1)
+    padref = 1.0,       -- the game's controller sensitivity (stored 0.1..5.0, slider 1..50 / 10) that gives exactly padsens
     debug = 0,          -- 1 = write a status line to FrogCam.log once a second (for troubleshooting)
 }
-local CFG_ORDER = { "dist", "height", "shoulder", "fov", "sens", "invert", "pmin", "pmax", "retlow", "retcenter", "aimmin", "aimmax", "aimz", "hpmove", "hpx", "hpy", "hint", "freekey", "debug" }
+local CFG_ORDER = { "dist", "height", "shoulder", "fov", "sens", "invert", "pmin", "pmax", "retlow", "retcenter", "aimmin", "aimmax", "aimz", "hpmove", "hpx", "hpy", "hint", "freekey", "padsens", "paddead", "padref", "debug" }
 local DIST_PRESETS = { 450.0, 700.0, 1100.0 }
 
 S.cfg = S.cfg or {}
@@ -101,6 +105,13 @@ local function keyPressed(pc, name)
     local down = keyDown(pc, name)
     S.keyState[name] = down
     return down and was == false        -- nil on the first poll: a key already held is ignored
+end
+-- a controller axis, -1..1 (Gamepad_LeftX, Gamepad_RightY, ...)
+local function axisValue(pc, name)
+    S.axisKeys = S.axisKeys or {}
+    local k = S.axisKeys[name]
+    if k == nil then k = { KeyName = FName(name) }; S.axisKeys[name] = k end
+    return pc:GetInputAnalogKeyState(k) or 0.0
 end
 
 -- ---------------------------------------------------------------- camera actor
@@ -190,12 +201,18 @@ end
 local VIS_COLLAPSED, VIS_HIT_TEST_INVISIBLE = 1, 3
 local HINT_SECONDS = 8.0
 if S.hintPending == nil then S.hintPending = true end
+-- on `frogcam reload`, drop the hint built by the old script so it is rebuilt with the current layout
+if valid(S.hint) then pcall(function() S.hint:RemoveFromParent() end) end
+S.hint, S.hintTB, S.hintLeft = nil, nil, nil
 
 -- "LeftControl" -> "LEFT CONTROL"
 local function keyLabel(name)
     return (tostring(name):gsub("(%l)(%u)", "%1 %2"):upper())
 end
 local function hintText()
+    if S.padMode then
+        return "FROGCAM   -   right stick  look and aim   |   click R3  camera distance   |   hold R3  top-down view"
+    end
     return "FROGCAM   -   hold " .. keyLabel(S.cfg.freekey) .. " for the mouse pointer   |   F5  top-down view   |   F6  camera distance"
 end
 
@@ -217,11 +234,11 @@ local function buildHint(pc)
     -- layout is written into the slot before the Slate widget exists
     local slot = canvas:AddChildToCanvas(tb)
     local ld = slot.LayoutData
-    ld.Anchors.Minimum.X = 0.5; ld.Anchors.Minimum.Y = 0.07; ld.Anchors.Maximum.X = 0.5; ld.Anchors.Maximum.Y = 0.07
+    ld.Anchors.Minimum.X = 0.5; ld.Anchors.Minimum.Y = 0.17; ld.Anchors.Maximum.X = 0.5; ld.Anchors.Maximum.Y = 0.17   -- below the round timer
     ld.Alignment.X = 0.5; ld.Alignment.Y = 0.0
     ld.Offsets.Left = 0; ld.Offsets.Top = 0; ld.Offsets.Right = 100; ld.Offsets.Bottom = 30
     slot.bAutoSize = true
-    tb:SetText(FText(hintText()))
+    S.hintTB = tb
     w:SetVisibility(VIS_COLLAPSED)
     w:AddToViewport(-40)       -- under the game's own menus
     return w
@@ -235,6 +252,8 @@ local function showHint(pc)
         if not ok then S.hintFails = (S.hintFails or 0) + 1; log("hint: " .. tostring(r)); return end
         S.hint = r
     end
+    if valid(S.hintTB) then S.hintTB:SetText(FText(hintText())) end    -- keys of the device in use
+    if S.padMode then S.padHintShown = true end
     S.hint:SetRenderOpacity(1.0)
     S.hint:SetVisibility(VIS_HIT_TEST_INVISIBLE)
     S.hintLeft = HINT_SECONDS
@@ -287,24 +306,122 @@ local function project(px, py, pz, cam, vw, vh)
 end
 
 -- ---------------------------------------------------------------- controller tick (also runs while paused)
+-- Controller research (debug only, also while FrogCam is off): which input mode the game thinks it is in,
+-- the stick positions, where the game keeps its cursor and where the frog aims - to find out whether the
+-- game aims with a stick-driven virtual cursor or with the stick direction itself.
+-- Diagnostics for the flickering challenge panel (Widget_ProgressInGame): how often the game redraws or
+-- toggles it, and how often it switches between controller and keyboard mode. Counted per log line.
+-- Hooks are registered once per game launch (kept in FROGCAM so `frogcam reload` does not add more).
+local PC_BP = "/Game/Blueprints/BP_ESPlayerController.BP_ESPlayerController_C:"
+local HUD_BP = "/Game/Widgets/Widget_HUD.Widget_HUD_C:"
+local PANEL_BP = "/Game/Widgets/Progression/Widget_ProgressInGame.Widget_ProgressInGame_C:"
+local DIAG_HOOKS = {
+    { "redraw", PANEL_BP .. "RedrawGoals" },
+    { "showhide", PANEL_BP .. "RefreshShowHide" },
+    { "toggle", PANEL_BP .. "PlayToggle" },
+    { "construct", PANEL_BP .. "Construct" },
+    { "device", PC_BP .. "Update Gamepad Usage" },
+    -- what might be asking for the redraw
+    { "checkGoals", PC_BP .. "CheckGoalUpdates" },
+    { "collectGoals", PC_BP .. "CollectUpdatedGoals" },
+    { "seedGoals", PC_BP .. "SeedUpdatedGoals" },
+    { "newlyCompleted", PC_BP .. "CheckForNewlyCompletedGoals" },
+    { "trackCamera", PC_BP .. "TrackCamera" },
+    { "outsideFrustum", PC_BP .. "OutsideGlobalFrustrumSelfReport" },
+    { "levelState", PC_BP .. "UpdateUIForLevelState" },
+    { "hudPopup", HUD_BP .. "HandleShowingChallengePopup" },
+    { "hudHubStuff", HUD_BP .. "ShowAndHideHubStuff" },
+    { "hudControls", HUD_BP .. "ShowHideControls" },
+}
+local function diagHooks()
+    A.diagHooked = A.diagHooked or {}
+    for _, h in ipairs(DIAG_HOOKS) do
+        local name, path = h[1], h[2]
+        if not A.diagHooked[name] then
+            local ok = pcall(function()
+                RegisterHook(path, function(Context, P1)
+                    local d = FROGCAM.S.diag or {}; FROGCAM.S.diag = d
+                    d[name] = (d[name] or 0) + 1
+                    if name == "device" or name == "toggle" then pcall(function() d[name .. "Last"] = tostring(P1:get()) end) end
+                end)
+            end)
+            if ok then A.diagHooked[name] = true; log("diag hook " .. name) end
+        end
+    end
+end
+local function diagText()
+    local d = S.diag or {}
+    S.diag = {}
+    local extra = {}
+    for i = 6, #DIAG_HOOKS do
+        local n = DIAG_HOOKS[i][1]
+        if (d[n] or 0) > 0 then extra[#extra + 1] = n .. " " .. d[n] end
+    end
+    return string.format("panel redraw %d showhide %d toggle %d(%s) construct %d | device switches %d(%s) | %s",
+        d.redraw or 0, d.showhide or 0, d.toggle or 0, tostring(d.toggleLast or "-"), d.construct or 0,
+        d.device or 0, tostring(d.deviceLast or "-"), (#extra > 0) and table.concat(extra, " ") or "-")
+end
+
+local function padLine(pc)
+    if S.cfg.debug == 0 or S.wall - (S.padT or -1) < 0.5 then return end
+    S.padT = S.wall
+    if S.wall - (S.diagT or -1) > 5 then S.diagT = S.wall; pcall(diagHooks) end   -- the widget class loads late
+    S.axisKeys = S.axisKeys or {}
+    local function axis(name)
+        local k = S.axisKeys[name]
+        if k == nil then k = { KeyName = FName(name) }; S.axisKeys[name] = k end
+        local v = 0.0; pcall(function() v = pc:GetInputAnalogKeyState(k) end)
+        return v
+    end
+    local lx, ly, rx, ry = axis("Gamepad_LeftX"), axis("Gamepad_LeftY"), axis("Gamepad_RightX"), axis("Gamepad_RightY")
+    local pad, sim, cached, plat, aim, cam = "?", "?", "?", "?", "?", "?"
+    pcall(function() pad = tostring(pc.bUsingGamepad) end)
+    pcall(function()
+        local gi = lib("/Script/Engine.Default__GameplayStatics"):GetGameInstance(pc)
+        sim = string.format("%.1f, game sens %s inv %s/%s", pc.SimulatedMouseSpeed, tostring(gi.GamepadSensitivity),
+            tostring(gi.bInvertGamepadX), tostring(gi.bInvertGamepadY))
+    end)
+    pcall(function() local m = pc.CachedMousePosition; cached = string.format("%.0f,%.0f", m.X, m.Y) end)
+    pcall(function() local m = lib("/Script/UMG.Default__WidgetLayoutLibrary"):GetMousePositionOnPlatform(); plat = string.format("%.0f,%.0f", m.X, m.Y) end)
+    pcall(function() aim = string.format("%.1f", pc.Pawn.LOCALONLY_Yaw) end)
+    pcall(function() cam = string.format("%.1f", pc.PlayerCameraManager:GetCameraRotation().Yaw) end)
+    local stickR = (math.abs(rx) + math.abs(ry) > 0.2) and string.format("%.1f", math.deg(math.atan(ry, rx))) or "-"
+    log(string.format("pad %s | L %.2f,%.2f  R %.2f,%.2f (angle %s) | cursor game %s screen %s | simspeed %s | frog aim %s | view yaw %s | frogcam %s | %s",
+        pad, lx, ly, rx, ry, stickR, cached, plat, sim, aim, cam, S.active and "on" or "off", diagText()))
+end
+
 function A.pcTick(Context, Delta)
     local pc = Context:get()
     if not valid(pc) then return end
     if pc:IsLocalPlayerController() ~= true then return end
     S.pc = pc
     S.wall = os.clock()
+    pcall(padLine, pc)
+    local dt = 0.016; pcall(function() dt = Delta:get() end)
 
-    if keyPressed(pc, "F5") then
+    local function toggle(how)
         S.on = not S.on
-        log("FrogCam " .. (S.on and "on" or "off") .. " (F5)")
-        if S.on then S.hintPending = true else deactivate(pc, "F5") end
+        log("FrogCam " .. (S.on and "on" or "off") .. " (" .. how .. ")")
+        if S.on then S.hintPending = true else deactivate(pc, how) end
     end
-    if keyPressed(pc, "F6") then
+    local function cycleDistance()
         local idx = 1
         for i, d in ipairs(DIST_PRESETS) do if math.abs(d - S.cfg.dist) < 1 then idx = i end end
         S.cfg.dist = DIST_PRESETS[idx % #DIST_PRESETS + 1]
         saveCfg()
         log("distance = " .. S.cfg.dist)
+    end
+    if keyPressed(pc, "F5") then toggle("F5") end
+    if keyPressed(pc, "F6") then cycleDistance() end
+    -- controller: click the right stick (R3) for the camera distance, hold it for a second to switch
+    -- FrogCam on/off (the hold keeps a stray click in a fight from changing the whole camera)
+    if keyDown(pc, "Gamepad_RightThumbstick") then
+        if S.r3Held == nil then S.r3Held, S.r3Fired = 0.0, false
+        else S.r3Held = S.r3Held + dt end
+        if not S.r3Fired and S.r3Held >= 1.0 then S.r3Fired = true; toggle("hold R3") end
+    elseif S.r3Held ~= nil then
+        if not S.r3Fired then cycleDistance() end
+        S.r3Held = nil
     end
 
     if not S.active then return end
@@ -316,6 +433,12 @@ function A.pcTick(Context, Delta)
     if paused or S.inMenu or pc.bPauseMenuUp == true then
         if S.look then S.look = false; S.lastMX = nil end
         placeReticle(pc, nil, nil)      -- the drawn pointer must match the real one for clicking menus
+    elseif S.look and S.padMode and S.parkX then
+        -- Controller mode: the game moves the cursor with the right stick in its own controller tick, which
+        -- some frames runs after the hero tick parked it - the reticle then flickered by a frame's worth of
+        -- stick movement. This runs after the game's controller tick, so the cursor is parked again.
+        -- (Not with a mouse: mouse movement between the two ticks would be thrown away.)
+        pc:SetMouseLocation(S.parkX, S.parkY)
     end
 end
 
@@ -402,24 +525,66 @@ function A.tick(Context, Delta)
         if type(sz.SizeX) == "number" and sz.SizeX > 0 then S.vw, S.vh = sz.SizeX, sz.SizeY end
     end
     local wl = lib("/Script/UMG.Default__WidgetLayoutLibrary")
+    -- Controller mode (the game switches by itself on the last device used): the game then moves the
+    -- cursor with the right stick on its own, so cursor movement is no longer the player's look input -
+    -- the right stick is read directly instead. The cursor is still parked on the aim point below.
+    local pad = pc.bUsingGamepad == true
+    if pad ~= S.padMode then
+        S.padMode = pad; S.lastMX = nil
+        log("input: " .. (pad and "controller" or "mouse and keyboard"))
+        if pad and not S.padHintShown and S.active then S.hintPending = true end
+    end
+    -- The game only reports a mouse position while the pointer is inside its window. Coming back to the
+    -- game by clicking it on the taskbar leaves the pointer outside, and with a controller nothing would
+    -- move it back in: in controller mode, using the sticks counts too - the first parking of the cursor
+    -- below puts it back into the window. (Tied to actual stick input, so FrogCam never grabs the pointer
+    -- while the player is in another program and the controller is just lying there.)
     local focused = pc:GetMousePosition({}, {}) == true
+    if not focused and pad then
+        local m = 0.0
+        for _, n in ipairs({ "Gamepad_LeftX", "Gamepad_LeftY", "Gamepad_RightX", "Gamepad_RightY" }) do
+            m = math.max(m, math.abs(axisValue(pc, n)))
+        end
+        focused = m > 0.3
+    end
     -- holding the free key (freekey, Left Ctrl by default) frees the pointer: hub pop-ups such as "Change
     -- Class - OPEN MENU" are clicked with it but do not count as a menu, so nothing else lets go of it
     local freed = keyDown(pc, S.cfg.freekey)
     local look = S.vw ~= nil and focused and not freed and not S.inMenu and pc.bPauseMenuUp ~= true
     if look ~= S.look then S.look = look; S.lastMX = nil end
+    local dt = 0.016; pcall(function() dt = Delta:get() end)
     if look then
-        local m = wl:GetMousePositionOnPlatform()
-        if S.lastMX ~= nil then
-            local inv = S.cfg.invert ~= 0 and -1 or 1
-            S.yaw = wrap(S.yaw + (m.X - S.lastMX) * S.cfg.sens)
-            S.pitch = clamp(S.pitch - (m.Y - S.lastMY) * S.cfg.sens * inv, S.cfg.pmin, S.cfg.pmax)
+        local inv = S.cfg.invert ~= 0 and -1 or 1
+        if pad then
+            local function stick(name)
+                local v = axisValue(pc, name)
+                local a = math.abs(v)
+                if a <= S.cfg.paddead then return 0.0 end
+                a = (a - S.cfg.paddead) / (1.0 - S.cfg.paddead)
+                return (v < 0 and -1 or 1) * a * a          -- squared: fine control near the centre
+            end
+            -- the game's own controller settings apply: its sensitivity slider (1..50, kept as 0.1..5.0) scales
+            -- the turn speed on a gentle curve, and its invert X / invert Y options flip the axes
+            local gsens, invX, invY = S.cfg.padref, false, false
+            pcall(function()
+                if not valid(S.gi) then S.gi = lib("/Script/Engine.Default__GameplayStatics"):GetGameInstance(pc) end
+                gsens = S.gi.GamepadSensitivity; invX = S.gi.bInvertGamepadX == true; invY = S.gi.bInvertGamepadY == true
+            end)
+            local speed = S.cfg.padsens * math.sqrt(math.max(gsens or S.cfg.padref, 0.1) / S.cfg.padref) * dt
+            S.yaw = wrap(S.yaw + stick("Gamepad_RightX") * speed * (invX and -1 or 1))
+            -- (Gamepad_RightY comes through negative for "stick up" here: pushing up looks up)
+            S.pitch = clamp(S.pitch - stick("Gamepad_RightY") * speed * 0.6 * (invY and -1 or 1), S.cfg.pmin, S.cfg.pmax)
+        else
+            local m = wl:GetMousePositionOnPlatform()
+            if S.lastMX ~= nil then
+                S.yaw = wrap(S.yaw + (m.X - S.lastMX) * S.cfg.sens)
+                S.pitch = clamp(S.pitch - (m.Y - S.lastMY) * S.cfg.sens * inv, S.cfg.pmin, S.cfg.pmax)
+            end
         end
     end
 
     S.step = "place"
     local loc = pawn:K2_GetActorLocation()
-    local dt = 0.016; pcall(function() dt = Delta:get() end)
     S.step = "hint"
     if S.hintPending then S.hintPending = false; showHint(pc) end
     tickHint(dt)
@@ -509,7 +674,8 @@ function A.tick(Context, Delta)
     if look then
         if sx == nil then sx, sy = S.vw / 2, S.cfg.retlow * S.vh end
         sx = clamp(sx, 2, S.vw - 3); sy = clamp(sy, 2, S.vh - 3)
-        pc:SetMouseLocation(math.floor(sx + 0.5), math.floor(sy + 0.5))
+        S.parkX, S.parkY = math.floor(sx + 0.5), math.floor(sy + 0.5)
+        pc:SetMouseLocation(S.parkX, S.parkY)
         local r = wl:GetMousePositionOnPlatform()      -- the reference is re-read after the warp, never assumed
         S.lastMX, S.lastMY = r.X, r.Y
     else

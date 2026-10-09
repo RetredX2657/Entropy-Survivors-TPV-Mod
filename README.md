@@ -7,6 +7,7 @@ A third-person camera mod for **Entropy Survivors**. It replaces the fixed top-d
 - **F5** switches between third person and the original top-down view.
 - **F6** cycles the camera distance: near (almost first person), mid and far.
 - Hold **Left Ctrl** to free the mouse pointer and click hub pop-ups. A hint at the top of the screen shows these keys when FrogCam switches on.
+- **Controller support** (tested with an Xbox Series X controller): the right stick turns the camera, R3 controls FrogCam, and the game's own controller sensitivity and invert settings apply. No keyboard needed, so it works from the couch and in Steam Big Picture.
 - Single-player only. It switches itself off in co-op.
 
 > **Made with AI.** FrogCam's code was written by an AI coding agent (Claude, in Claude Code), directed and play-tested in the game by a human player. See [Credits](#credits).
@@ -32,13 +33,15 @@ Your UE4SS build needs to support Unreal Engine 5.4. FrogCam is tested with UE4S
 
 ## Controls
 
-| Key | Action |
-|-----|--------|
-| Mouse | Look and aim |
-| WASD | Move, relative to the camera |
-| F5 | Third person on/off |
-| F6 | Camera distance: near (almost first person) / mid / far |
-| Hold Left Ctrl | Free the mouse pointer, for clicking hub pop-ups like "Change Class → Open Menu". The camera holds still. Change the key with `frogcam freekey <key>` |
+| Action | Mouse & keyboard | Controller |
+|--------|------------------|------------|
+| Look and aim | Mouse | Right stick |
+| Move, relative to the camera | WASD | Left stick |
+| Third person on/off | F5 | Hold R3 (right stick click) for 1 second |
+| Camera distance: near (almost first person) / mid / far | F6 | Click R3 |
+| Free the mouse pointer, for clicking hub pop-ups like "Change Class → Open Menu" (the camera holds still) | Hold Left Ctrl (change with `frogcam freekey <key>`) | Not needed |
+
+The game switches between mouse and controller by itself, depending on which you touched last. FrogCam follows it, and the key hint shows the controls for whichever you're using.
 
 ## Settings
 
@@ -59,7 +62,7 @@ frogcam reload          reload the script without restarting the game
 | `shoulder` | 0 | Sideways offset (+ = right) |
 | `fov` | 75 | Field of view |
 | `sens` | 0.12 | Mouse sensitivity (degrees per pixel) |
-| `invert` | 0 | 1 = invert mouse Y |
+| `invert` | 0 | 1 = invert mouse Y. The controller follows the game's own invert options instead |
 | `pmin` / `pmax` | -60 / 30 | Camera pitch limits. Looking up also stops just above level (see Known limitations) |
 | `retcenter` | 1 | 1 = reticle always drawn mid-screen, 0 = drawn where the game's cursor really is (useful for debugging aim) |
 | `retlow` | 0.9 | Safety limit: the lowest the hidden cursor may go on screen before the camera stops tilting up |
@@ -68,6 +71,9 @@ frogcam reload          reload the script without restarting the game
 | `hpmove` | 1 | 1 = show the health bar at a fixed spot on screen, 0 = where the game puts it (on the HUD ring under the mech) |
 | `hpx` / `hpy` | 0.25 / 0.85 | Health bar screen position as a fraction of width / height (0,0 = top left) |
 | `hint` | 1 | 1 = show the key hint (free-pointer key / F5 / F6) for a few seconds when FrogCam switches on |
+| `padsens` | 200 | Controller camera turn speed at full stick tilt, in degrees per second, at the game's controller sensitivity of 10. The game's slider scales it: about 65°/s at 1, about 450°/s at 50 |
+| `paddead` | 0.15 | Controller right-stick deadzone (0 to 1) |
+| `padref` | 1 | The game's controller sensitivity (it stores 0.1 to 5.0, the slider value ÷ 10) at which `padsens` applies unchanged |
 | `freekey` | LeftControl | Key to hold for a free mouse pointer, as an Unreal key name: `LeftControl`, `Tab`, `B`, `MiddleMouseButton`, ... (Alt is the game's alternate dodge) |
 | `debug` | 0 | 1 = write a status line to `FrogCam.log` every second, for troubleshooting. The log starts fresh at each game launch |
 
@@ -82,7 +88,8 @@ frogcam reload          reload the script without restarting the game
 - The game was built to be seen from above. Expect missing geometry, see-through effects and UI elements that are positioned for the top-down view.
 - **Looking up stops just above level** (about +7° at the default distance, more with F6 near, less with far). The game aims through the mouse cursor at a plane at the frog's gun height, and that only works while the camera is above the gun. A camera below it makes the frog aim backwards. Raising `height` or lowering `dist` (F6 near) gives a little more room.
 - It's a bullet hell, and enemies behind you are hard to see. Raise `dist` or press F6 if you get swarmed.
-- Gamepad isn't supported yet.
+- **The challenge panel (top left) can flicker** while FrogCam is on. With the third-person camera the game redraws it several times a second. If it bothers you, hide it with the game's Show/Hide Challenges button (G, or the D-pad on a controller).
+- **After Alt-Tabbing back to the game, click once inside it** before using a controller. Until then the game ignores controller input. That's the game's own behaviour, with or without FrogCam.
 
 ## Development
 

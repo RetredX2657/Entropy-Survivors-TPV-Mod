@@ -27,6 +27,9 @@ CONTROLS
   Hold Left Ctrl   free mouse pointer, for clicking hub pop-ups
                    such as "Change Class - Open Menu"
 
+  Controller:      right stick look and aim, left stick move,
+                   click R3 camera distance, hold R3 for 1 second on / off
+
 Settings can be changed in game from the console (the ~ key):
   frogcam              list all settings
   frogcam fov 85       change one (saved automatically)
@@ -38,7 +41,12 @@ GOOD TO KNOW
 - Single-player only: FrogCam switches itself off in co-op.
 - Looking up stops a little above level; the game can only aim when the
   camera is above the frog's gun.
-- Mouse and keyboard only for now (no controller support yet).
+- Works with a controller too (tested with an Xbox Series X controller).
+  The game's controller sensitivity and invert settings apply.
+- The challenge panel (top left) can flicker with FrogCam on. Hide it with
+  the game's Show/Hide Challenges button (G, or the D-pad) if it bothers you.
+- After Alt-Tabbing back to the game, click once inside it before using a
+  controller (the game's own behaviour, with or without FrogCam).
 
 
 UNINSTALL

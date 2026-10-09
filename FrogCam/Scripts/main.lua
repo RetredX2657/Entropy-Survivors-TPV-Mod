@@ -10,7 +10,7 @@ FROGCAM = FROGCAM or {}
 local A = FROGCAM
 A.dir = MOD_DIR
 A.S = A.S or {}
-A.version = "0.2.0"
+A.version = "0.3.0"
 
 local LOG = MOD_DIR .. "FrogCam.log"
 -- a fresh log every game launch (main.lua runs once per launch; `frogcam reload` only reruns frogcam.lua)
